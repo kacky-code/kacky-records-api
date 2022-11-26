@@ -132,6 +132,18 @@ def update_wrs():
     dedup_new_scores(update_wrs_kk)
 
     for e in update_wrs_kk:
+        query_discord = f"""
+                    UPDATE worldrecords_discord_notify AS wr_not
+                    LEFT JOIN worldrecords AS wr
+                        ON wr_not.id = wr.id
+                    LEFT JOIN maps
+                        ON wr.map_id = maps.id
+                    SET notified = 0, time_diff = wr.score - ?
+                    WHERE maps.{'tmx_id' if 'tmx_id' in e else 'tm_uid'} = ?;
+                    """
+        backend_db.execute(
+            query_discord, (e["score"], e["tmx_id"] if "tmx_id" in e else e["tm_uid"])
+        )
         query = f"""
                  UPDATE worldrecords AS wr
                  LEFT JOIN maps
@@ -149,18 +161,6 @@ def update_wrs():
                 e["date"],
                 e["tmx_id"] if "tmx_id" in e else e["tm_uid"],
             ),
-        )
-        query_discord = f"""
-            UPDATE worldrecords_discord_notify AS wr_not
-            LEFT JOIN worldrecords AS wr
-                ON wr_not.id = wr.id
-            LEFT JOIN maps
-                ON wr.map_id = maps.id
-            SET notified = 0, time_diff = wr.score - ?
-            WHERE maps.{'tmx_id' if 'tmx_id' in e else 'tm_uid'} = ?;
-            """
-        backend_db.execute(
-            query_discord, (e["score"], e["tmx_id"] if "tmx_id" in e else e["tm_uid"])
         )
 
 
