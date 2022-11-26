@@ -1,0 +1,11 @@
+# FASTAPI PARAMETERS
+port: 8000
+bind_hosts: 0.0.0.0
+
+# LOGGING
+logtype: STDOUT # STDOUT, FILE
+logfile: flask.log # might require absolute path
+loglevel: DEBUG # DEBUG, INFO, WARNING, ERROR, CRITICAL
+logger_name: KKRecords
+
+num_db_connections: 15
