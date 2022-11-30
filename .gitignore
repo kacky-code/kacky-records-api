@@ -54,4 +54,5 @@ MANIFEST
 .python-version
 
 secrets.yaml
+pip-wheel-metadata
 venv
