@@ -1,7 +1,6 @@
 import mariadb
 
 
-# noinspection SqlResolve
 class KackyReloaded_KackyRecords:
     def __init__(self, secrets):
         self.cursor, self.connection = None, None

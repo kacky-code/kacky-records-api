@@ -13,9 +13,9 @@ from kacky_records_api.db_operators.operators import DBConnection
 from kacky_records_api.record_aggregators.kackiest_kacky_db import (
     KackiestKacky_KackyRecords,
 )
+from kacky_records_api.record_aggregators.tmnf_exchange import TmnfTmxApi
 
 # from kacky_records_api.record_aggregators.nadeo_webservices import NadeoAPI
-from kacky_records_api.record_aggregators.tmnf_exchange import TmnfTmxApi
 
 app = flask.Flask(__name__)
 CORS(app)
@@ -27,15 +27,15 @@ def update_wrs():
     def check_new_scores(candidates, src: str):
         update_elements = []
         if src == "tmx":
+            query = """
+                    SELECT *
+                    FROM worldrecords
+                    LEFT JOIN maps
+                    ON worldrecords.map_id = maps.id
+                    WHERE score > ?
+                        AND maps.tmx_id = ?;
+                    """
             for kid, data in candidates.items():
-                query = """
-                        SELECT *
-                        FROM worldrecords
-                        LEFT JOIN maps
-                        ON worldrecords.map_id = maps.id
-                        WHERE score > ?
-                            AND maps.tmx_id = ?;
-                        """
                 a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
                 if a:
                     date = (
@@ -56,15 +56,15 @@ def update_wrs():
                     }
                     update_elements.append(upd)
         elif src == "kkdb":
+            query = """
+                    SELECT *
+                    FROM worldrecords
+                    LEFT JOIN maps
+                    ON worldrecords.map_id = maps.id
+                    WHERE score > ?
+                        AND maps.tm_uid = ?;
+                    """
             for e in candidates:
-                query = """
-                        SELECT *
-                        FROM worldrecords
-                        LEFT JOIN maps
-                        ON worldrecords.map_id = maps.id
-                        WHERE score > ?
-                            AND maps.tm_uid = ?;
-                        """
                 a = backend_db.fetchall(query, (e[4], e[0]))
                 if a:
                     upd = {
@@ -75,6 +75,35 @@ def update_wrs():
                         "tm_uid": e[0],
                         "date": e[5].strftime("%Y-%m-%d %H:%M:%S"),
                         "source": "KKDB",
+                    }
+                    update_elements.append(upd)
+        elif src == "dedi":
+            query = """
+                    SELECT *
+                    FROM worldrecords
+                    LEFT JOIN maps
+                    ON worldrecords.map_id = maps.id
+                    WHERE score > ?
+                        AND maps.tmx_id = ?;
+                    """
+            for kid, data in candidates.items():
+                a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
+                if a:
+                    date = (
+                        datetime.datetime.strptime(
+                            data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f"
+                        )
+                        if "lastactivity" in data
+                        else datetime.datetime.fromtimestamp(0)
+                    )
+                    upd = {
+                        "kid": kid,
+                        "score": data["wrscore"],
+                        "login": "",
+                        "nick": data["wruser"],
+                        "tmx_id": str(data["tid"]),
+                        "date": date.strftime("%Y-%m-%d %H:%M:%S"),
+                        "source": "DEDI",
                     }
                     update_elements.append(upd)
 
@@ -117,18 +146,18 @@ def update_wrs():
     logger.info("updating wrs log")
     kk_upd = KackiestKacky_KackyRecords(secrets)
     tmx_upd = TmnfTmxApi(config)
-    # kr_upd = NadeoAPI(secrets["ubisoft_account"], secrets["ubisoft_passwd"])
+    # kr_nadeo_upd = NadeoAPI(secrets["ubisoft_account"], secrets["ubisoft_passwd"])
+    # kr_upd = KackyReloaded_KackyRecords(secrets)
     backend_db = DBConnection(config, secrets)
 
     recent_wrs_kk_db = kk_upd.get_recent_world_records()
-    # wrs_kk_tmx = tmx_upd.get_kacky_wrs()
     recent_wrs_kk_tmx = tmx_upd.get_activity()
+    all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
 
-    # update_wrs_kk = check_new_scores(wrs_kk_tmx, "tmx")
-    update_wrs_kk = check_new_scores(recent_wrs_kk_tmx, "tmx")
+    update_wrs_kk = []
+    update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx")
     update_wrs_kk += check_new_scores(recent_wrs_kk_db, "kkdb")
-    print(update_wrs_kk)
-    print(len(update_wrs_kk))
+    update_wrs_kk += check_new_scores(all_dedi_wrs, "dedi")
     dedup_new_scores(update_wrs_kk)
 
     for e in update_wrs_kk:
