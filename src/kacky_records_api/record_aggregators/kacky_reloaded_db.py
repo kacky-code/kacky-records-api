@@ -1,3 +1,5 @@
+import datetime
+
 import mariadb
 
 
@@ -81,18 +83,49 @@ class KackyReloaded_KackyRecords:
                     wrs[rec["kid"]].pop("kid")
         return wrs
 
+    def get_recent_world_records(
+        self,
+        since_datetime: datetime.datetime = datetime.datetime.now()
+        - datetime.timedelta(days=7),
+    ):
+        since_str = since_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        query = """
+            SELECT kackychallenges.uid,
+                   kackychallenges.name,
+                   kackychallenges.edition,
+                   kackychallenges.author,
+                   localrecord.score,
+                   localrecord.created_at,
+                   player.login,
+                   player.nickname
+            FROM   (SELECT map_id,
+                           Min(score) AS wr
+                    FROM   localrecord
+                    GROUP  BY map_id) toprecords
+                   INNER JOIN localrecord
+                           ON toprecords.map_id = localrecord.map_id
+                              AND toprecords.wr = localrecord.score
+                   LEFT JOIN player
+                          ON localrecord.player_id = player.id
+                   LEFT JOIN kackychallenges
+                          ON kackychallenges.id = localrecord.map_id;
+            WHERE  localrecord.created_at > ?;
+        """
+        self.cursor.execute(query, (since_str,))
+        return self.cursor.fetchall()
+
     def get_maps(self):
         query = """
-        SELECT
-            uid,
-            name,
-            player.nickname AS author_nick,
-            player.uplay_nickname AS author_uplay,
-            edition
-        FROM kackychallenges
-        LEFT JOIN player
-        ON kackychallenges.author = player.login;
-        """
+            SELECT
+                uid,
+                name,
+                player.nickname AS author_nick,
+                player.uplay_nickname AS author_uplay,
+                edition
+            FROM kackychallenges
+            LEFT JOIN player
+            ON kackychallenges.author = player.login;
+            """
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
