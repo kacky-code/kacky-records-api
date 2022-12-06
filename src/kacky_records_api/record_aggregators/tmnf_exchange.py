@@ -41,7 +41,9 @@ class TmnfTmxApi:
         if raw:
             return r.json()
         return {
-            m["TrackName"].split("#")[1]: {
+            m["TrackName"]
+            .split("#")[1]
+            .replace("\u2013", "-"): {
                 "tid": m["TrackId"],
                 "wrscore": m["WRReplay"]["ReplayTime"],
                 "wruser": m["WRReplay"]["User"]["Name"],
@@ -52,7 +54,7 @@ class TmnfTmxApi:
     def get_activity(self, raw=False):
         # https://api2.mania.exchange/Method/Index/43
         urn = (
-            "tracks?author=%23masters+of+kacky&count=10&order1=10&fields=TrackId"
+            "tracks?author=%23masters+of+kacky&count=100&order1=10&fields=TrackId"
             "%2CTrackName%2CWRReplay.User.Name%2CWRReplay.ReplayTime%2CActivityAt"
         )
         try:
@@ -63,7 +65,9 @@ class TmnfTmxApi:
         if raw:
             return r.json()
         return {
-            m["TrackName"].split("#")[1]: {
+            m["TrackName"]
+            .split("#")[1]
+            .replace("\u2013", "-"): {
                 "tid": m["TrackId"],
                 "wrscore": m["WRReplay"]["ReplayTime"],
                 "wruser": m["WRReplay"]["User"]["Name"],
@@ -86,7 +90,10 @@ class TmnfTmxApi:
         except requests.exceptions.RequestException:
             self._logger.error("Error connecting to TMX!")
             return {}
-        return {m["TrackName"].split("#")[1]: m["TrackId"] for m in r.json()["Results"]}
+        return {
+            m["TrackName"].split("#")[1].replace("\u2013", "-"): m["TrackId"]
+            for m in r.json()["Results"]
+        }
 
     def get_map_dedimania_wr(self, tmxid, kacky_id=None):
         urn_dedi = f"tracks/dedimania?trackId={tmxid}&count=1&fields=Time,Login"
@@ -136,5 +143,6 @@ class TmnfTmxApi:
 
 if __name__ == "__main__":
     t = TmnfTmxApi({"logger_name": "asd"})
-    a = t.get_all_kacky_dedimania_wrs()
+    # a = t.get_all_kacky_dedimania_wrs()
+    a = t.get_activity()
     print(a)
