@@ -91,7 +91,7 @@ def update_wrs():
                 if a:
                     date = (
                         datetime.datetime.strptime(
-                            data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f"
+                            data["lastactivity"], "%Y-%m-%dT%H:%M:%S"
                         )
                         if "lastactivity" in data
                         else datetime.datetime.fromtimestamp(0)
