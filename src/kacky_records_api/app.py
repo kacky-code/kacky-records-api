@@ -1,8 +1,9 @@
 import atexit
-import datetime
+import datetime.datetime as dt
 import logging
 import os
 from pathlib import Path
+from typing import Dict, Union
 
 import flask
 import yaml
@@ -23,89 +24,115 @@ app.config["CORS_HEADERS"] = "Content-Type"
 logger = None
 
 
+def build_score(
+    kid: str,
+    score: int,
+    date: Union[str, dt],
+    source: str,
+    login: Union[str, None] = None,
+    nick: Union[str, None] = None,
+    tmx_id: Union[str, int, None] = None,
+    tm_uid: Union[str, None] = None,
+) -> Dict[str, Union[str, int]]:
+    # either tm_uid or tmx_id need to be set
+    if not (tm_uid or tmx_id):
+        raise ValueError("Need either tm_uid or tmx_id!")
+    # either login or nick need to be set
+    if not (login or nick):
+        raise ValueError("Need either tm_uid or tmx_id!")
+    # check if source value is legal
+    if source not in ["KKDB", "KRDB", "DEDI", "TMX", "NADO"]:
+        raise ValueError("Bad value for source")
+    # build base result dict (missing tmx_id/tm_uid
+    res = {
+        "kid": kid if "#" not in kid else kid.split("#")[1],
+        "score": score,
+        "date": date if isinstance(date, str) else date.strftime("%Y-%m-%d %H:%M:%S"),
+        "source": source,
+    }
+    # add missing field for tmx_id XOR tm_uid or both
+    if tmx_id:
+        res["tmx_id"] = tmx_id if isinstance(tmx_id, str) else str(tmx_id)
+    if tm_uid:
+        res["tm_uid"] = tmx_id if isinstance(tm_uid, str) else str(tm_uid)
+    # add missing field for login XOR nick or both
+    if login:
+        res["login"] = login
+    if nick:
+        res["nick"] = nick
+    return res
+
+
 def update_wrs():
     def check_new_scores(candidates, src: str):
         update_elements = []
-        if src == "tmx":
-            query = """
-                    SELECT *
+        basequery = """
+                    SELECT worldrecords.id
                     FROM worldrecords
                     LEFT JOIN maps
                     ON worldrecords.map_id = maps.id
-                    WHERE score > ?
-                        AND maps.tmx_id = ?;
+                    WHERE score > ? AND maps.
                     """
+        if src == "tmx":
+            query = basequery + "tmx_id = ?;"
             for kid, data in candidates.items():
                 a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
                 if a:
                     date = (
-                        datetime.datetime.strptime(
-                            data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f"
-                        )
+                        dt.strptime(data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f")
                         if "lastactivity" in data
-                        else datetime.datetime.fromtimestamp(0)
+                        else dt.fromtimestamp(0)
                     )
-                    upd = {
-                        "kid": kid,
-                        "score": data["wrscore"],
-                        "login": "",
-                        "nick": data["wruser"],
-                        "tmx_id": str(data["tid"]),
-                        "date": date.strftime("%Y-%m-%d %H:%M:%S"),
-                        "source": "TMX",
-                    }
-                    update_elements.append(upd)
+                    update_elements.append(
+                        build_score(
+                            kid,
+                            data["wrscore"],
+                            date,
+                            "TMX",
+                            nick=data["wruser"],
+                            tmx_id=data["tid"],
+                        )
+                    )
         elif src == "kkdb":
-            query = """
-                    SELECT *
-                    FROM worldrecords
-                    LEFT JOIN maps
-                    ON worldrecords.map_id = maps.id
-                    WHERE score > ?
-                        AND maps.tm_uid = ?;
-                    """
+            query = basequery + "tm_uid = ?;"
             for e in candidates:
                 a = backend_db.fetchall(query, (e[4], e[0]))
                 if a:
-                    upd = {
-                        "kid": e[1].split("#")[1],
-                        "score": e[4],
-                        "login": e[6],
-                        "nick": e[7],
-                        "tm_uid": e[0],
-                        "date": e[5].strftime("%Y-%m-%d %H:%M:%S"),
-                        "source": "KKDB",
-                    }
-                    update_elements.append(upd)
+                    update_elements.append(
+                        build_score(
+                            e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
+                        )
+                    )
         elif src == "dedi":
-            query = """
-                    SELECT *
-                    FROM worldrecords
-                    LEFT JOIN maps
-                    ON worldrecords.map_id = maps.id
-                    WHERE score > ?
-                        AND maps.tmx_id = ?;
-                    """
+            query = basequery + "tmx_id = ?;"
             for kid, data in candidates.items():
                 a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
                 if a:
                     date = (
-                        datetime.datetime.strptime(
-                            data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f"
-                        )
+                        dt.strptime(data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f")
                         if "lastactivity" in data
-                        else datetime.datetime.fromtimestamp(0)
+                        else dt.fromtimestamp(0)
                     )
-                    upd = {
-                        "kid": kid,
-                        "score": data["wrscore"],
-                        "login": "",
-                        "nick": data["wruser"],
-                        "tmx_id": str(data["tid"]),
-                        "date": date.strftime("%Y-%m-%d %H:%M:%S"),
-                        "source": "DEDI",
-                    }
-                    update_elements.append(upd)
+                    update_elements.append(
+                        build_score(
+                            kid,
+                            data["wrscore"],
+                            date,
+                            "DEDI",
+                            nick=data["wruser"],
+                            tmx_id=data["tid"],
+                        )
+                    )
+        elif src == "kkdb":
+            query = basequery + "tm_uid = ?;"
+            for e in candidates:
+                a = backend_db.fetchall(query, (e[4], e[0]))
+                if a:
+                    update_elements.append(
+                        build_score(
+                            e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
+                        )
+                    )
 
         return update_elements
 
@@ -123,9 +150,7 @@ def update_wrs():
                     # kacky track length limited to 10 min
                     if cand["score"] <= best_score.get("score", 15 * 60 * 1000):
                         # want earliest date
-                        if datetime.datetime.strptime(
-                            cand["date"], "%Y-%m-%d %H:%M:%S"
-                        ) < datetime.datetime.strptime(
+                        if dt.strptime(cand["date"], "%Y-%m-%d %H:%M:%S") < dt.strptime(
                             best_score.get("date", "5555-05-05 05:05:05"),
                             "%Y-%m-%d %H:%M:%S",
                         ):
