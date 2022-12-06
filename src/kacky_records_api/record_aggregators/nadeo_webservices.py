@@ -148,7 +148,7 @@ class NadeoAPI:
         )
         r
 
-    def get_leaders_for_map(self, mapuid):
+    def _get_leaders_for_map(self, mapuid):
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -161,6 +161,23 @@ class NadeoAPI:
             headers=headers,
         )
         return r.json()
+
+    def get_leaders_for_map(self, mapuid):
+        leaders = self._get_leaders_for_map(mapuid)
+        zone = None
+        for t in leaders["tops"]:
+            if t["zoneName"] == "World":
+                zone = t["top"]
+                break
+
+        for rec in zone:
+            if rec["position"] == 1:
+                return {
+                    "mapuid": leaders["mapUid"],
+                    "accountId": zone["accountId"],
+                    "score": zone["score"],
+                }
+        return {}
 
     def get_map_info(self, mapuid):
         # https://live-services.trackmania.nadeo.live/api/token/map/xI5EN2vK86qweSUY965uI0GJ5wc
@@ -183,6 +200,18 @@ if __name__ == "__main__":
 
     res = nad.get_leaders_for_map(mapid)
     print(res)
+    from kacky_records_api.record_aggregators.kacky_reloaded_db import (
+        KackyReloaded_KackyRecords,
+    )
+
+    kr = KackyReloaded_KackyRecords(secrets)
+    maps = kr.get_maps()
+    wrs = []
+    for i, m in enumerate(maps):
+        print(i)
+        wrs.append(nad.get_leaders_for_map(m[0]))
+    print(wrs)
+    1
     # res = test(services_atoken)
     # print(res)
 
