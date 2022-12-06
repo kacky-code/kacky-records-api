@@ -102,11 +102,12 @@ class TmnfTmxApi:
             )
             return {}
         try:
-            print(f"updating {kacky_id}")
             return {
                 kacky_id
                 if kacky_id
-                else r_info.json()["Results"][0]["TrackName"].split("#")[1]: {
+                else r_info.json()["Results"][0]["TrackName"]
+                .split("#")[1]
+                .replace("\u2013", "-"): {
                     "tid": tmxid,
                     "wrscore": r_dedi.json()["Results"][0]["Time"],
                     "wruser": r_dedi.json()["Results"][0]["Login"],
@@ -128,7 +129,7 @@ class TmnfTmxApi:
         kacky_ids = self.get_kacky_tmx_ids()
         dedi_wrs = {}
         for kid, tmx_kid in kacky_ids.items():
-            dedi_wrs = dedi_wrs | self.get_map_dedimania_wr(tmx_kid, kacky_id=kid)
+            dedi_wrs = {**dedi_wrs, **self.get_map_dedimania_wr(tmx_kid, kacky_id=kid)}
 
         return dedi_wrs
 
