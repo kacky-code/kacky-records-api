@@ -84,7 +84,7 @@ class KackiestKacky_KackyRecords:
     def get_recent_world_records(
         self,
         since_datetime: datetime.datetime = datetime.datetime.now()
-        - datetime.timedelta(days=7),
+        - datetime.timedelta(days=3),
     ):
         since_str = since_datetime.strftime("%Y-%m-%d %H:%M:%S")
         query = """

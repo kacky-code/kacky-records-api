@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 from pathlib import Path
+from threading import Lock
 
 import flask
 import yaml
@@ -21,9 +22,16 @@ app = flask.Flask(__name__)
 CORS(app)
 app.config["CORS_HEADERS"] = "Content-Type"
 logger = None
+update_counter = 1
+updating_records_lock = Lock()
 
 
 def update_wrs():
+    updating_records_lock.acquire(timeout=2)
+    if not updating_records_lock:
+        return
+    global update_counter
+
     def check_new_scores(candidates, src: str):
         update_elements = []
         if src == "tmx":
@@ -152,7 +160,11 @@ def update_wrs():
 
     recent_wrs_kk_db = kk_upd.get_recent_world_records()
     recent_wrs_kk_tmx = tmx_upd.get_activity()
-    all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
+    # every 10 min check dedimania records
+    if update_counter == 10:
+        all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
+    else:
+        all_dedi_wrs = {}
 
     update_wrs_kk = []
     update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx")
@@ -191,6 +203,8 @@ def update_wrs():
                 e["tmx_id"] if "tmx_id" in e else e["tm_uid"],
             ),
         )
+    update_counter = update_counter % 10 + 1
+    updating_records_lock.release()
 
 
 @app.route("/")
@@ -235,7 +249,7 @@ if __name__ == "__main__":
 
     # setup schedule to update wrs
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_wrs, trigger="interval", seconds=10 * 60)
+    scheduler.add_job(func=update_wrs, trigger="interval", seconds=60)
     # start scheduler
     scheduler.start()
     # shutdown scheduler on exit
