@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import requests
@@ -47,6 +48,9 @@ class TmnfTmxApi:
                 "tid": m["TrackId"],
                 "wrscore": m["WRReplay"]["ReplayTime"],
                 "wruser": m["WRReplay"]["User"]["Name"],
+                "lastactivity": datetime.datetime.fromtimestamp(0).strftime(
+                    "%Y-%m-%dT%H:%M:%S.%f"
+                ),
             }
             for m in r.json()["Results"]
         }
@@ -54,7 +58,7 @@ class TmnfTmxApi:
     def get_activity(self, raw=False):
         # https://api2.mania.exchange/Method/Index/43
         urn = (
-            "tracks?author=%23masters+of+kacky&count=100&order1=10&fields=TrackId"
+            "tracks?author=%23masters+of+kacky&count=20&order1=10&fields=TrackId"
             "%2CTrackName%2CWRReplay.User.Name%2CWRReplay.ReplayTime%2CActivityAt"
         )
         try:
@@ -83,7 +87,7 @@ class TmnfTmxApi:
     def get_kacky_tmx_ids(self):
         kacky_maps = (
             "https://tmnf.exchange/api/tracks?author=%23masters+of+kacky&"
-            "count=500&fields=TrackId%2CTrackName"
+            "count=1000&fields=TrackId%2CTrackName"
         )
         try:
             r = requests.get(kacky_maps, timeout=10)
@@ -118,7 +122,9 @@ class TmnfTmxApi:
                     "tid": tmxid,
                     "wrscore": r_dedi.json()["Results"][0]["Time"],
                     "wruser": r_dedi.json()["Results"][0]["Login"],
-                    "lastactivity": "1970-01-01T01:00:00",
+                    "lastactivity": datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
                 }
             }
         except TypeError:
