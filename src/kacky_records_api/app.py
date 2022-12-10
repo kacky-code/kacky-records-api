@@ -1,8 +1,8 @@
 import atexit
-import datetime.datetime as dt
 import json
 import logging
 import os
+from datetime import datetime as dt
 from pathlib import Path
 from threading import Lock
 from typing import Dict, Union
@@ -49,7 +49,7 @@ def build_score(
         raise ValueError("Bad value for source")
     # build base result dict (missing tmx_id/tm_uid
     res = {
-        "kid": kid if "#" not in kid else kid.split("#")[1],
+        "kid": kid if "#" not in kid else kid.split("#")[1].replace("\u2013", "-"),
         "score": score,
         "date": date if isinstance(date, str) else date.strftime("%Y-%m-%d %H:%M:%S"),
         "source": source,
@@ -58,7 +58,7 @@ def build_score(
     if tmx_id:
         res["tmx_id"] = tmx_id if isinstance(tmx_id, str) else str(tmx_id)
     if tm_uid:
-        res["tm_uid"] = tmx_id if isinstance(tm_uid, str) else str(tm_uid)
+        res["tm_uid"] = tm_uid if isinstance(tm_uid, str) else str(tm_uid)
     # add missing field for login XOR nick or both
     if login:
         res["login"] = login
@@ -119,7 +119,7 @@ def update_wrs():
                 a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
                 if a:
                     date = (
-                        dt.strptime(data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f")
+                        dt.strptime(data["lastactivity"], "%Y-%m-%d %H:%M:%S")
                         if "lastactivity" in data
                         else dt.fromtimestamp(0)
                     )
@@ -152,22 +152,25 @@ def update_wrs():
         check_lst = list(map(lambda c: c["kid"], candidates))
         seen = set()
         dupes = [x for x in check_lst if x in seen or seen.add(x)]
+        dupes = list(set(dupes))
         best_score = {}
         weak_elements = []
         for d in dupes:
             for cand in candidates:
                 if d == cand["kid"]:
                     # kacky track length limited to 10 min
-                    if cand["score"] <= best_score.get("score", 15 * 60 * 1000):
+                    if cand["score"] == best_score.get("score", 15 * 60 * 1000):
                         # want earliest date
                         if dt.strptime(cand["date"], "%Y-%m-%d %H:%M:%S") < dt.strptime(
-                            best_score.get("date", "5555-05-05 05:05:05"),
-                            "%Y-%m-%d %H:%M:%S",
+                            best_score["date"], "%Y-%m-%d %H:%M:%S"
                         ):
                             weak_elements.append(best_score)
                             best_score = cand.copy()
                         else:
                             weak_elements.append(cand)
+                    elif cand["score"] < best_score.get("score", 15 * 60 * 1000):
+                        weak_elements.append(best_score)
+                        best_score = cand.copy()
                     else:
                         weak_elements.append(cand)
                     # candidates.remove(cand)
@@ -186,6 +189,7 @@ def update_wrs():
 
     recent_wrs_kk_db = kk_upd.get_recent_world_records()
     recent_wrs_kk_tmx = tmx_upd.get_activity()
+    # all_tmx = tmx_upd.get_kacky_wrs()
     # every 10 min check dedimania records
     if update_counter == 10:
         all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
@@ -193,12 +197,13 @@ def update_wrs():
         all_dedi_wrs = {}
 
     update_wrs_kk = []
-    update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx")
     update_wrs_kk += check_new_scores(recent_wrs_kk_db, "kkdb")
+    update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx")
+    # update_wrs_kk += check_new_scores(all_tmx, "tmx")
     update_wrs_kk += check_new_scores(all_dedi_wrs, "dedi")
-    dedup_new_scores(update_wrs_kk)
+    update_wrs_kk_dedup = dedup_new_scores(update_wrs_kk)
 
-    for e in update_wrs_kk:
+    for e in update_wrs_kk_dedup:
         query_discord = f"""
                     UPDATE worldrecords_discord_notify AS wr_not
                     LEFT JOIN worldrecords AS wr
@@ -222,8 +227,8 @@ def update_wrs():
             query,
             (
                 e["score"],
-                e["login"],
-                e["nick"],
+                e["login"] if "login" in e else "",
+                e["nick"] if "nick" in e else "",
                 e["source"],
                 e["date"],
                 e["tmx_id"] if "tmx_id" in e else e["tm_uid"],
@@ -261,6 +266,12 @@ def wrs_per_event(event, edition):
         for wr in wrs_for_event
     ]
     return json.dumps(wrs_for_event_dicts), 200
+
+
+@app.route("/events")
+def get_all_events():
+    events = backend_db.fetchone("SELECT name, shortname FROM events;")
+    return json.dumps(events)
 
 
 if __name__ == "__main__":
