@@ -34,10 +34,13 @@ class KackiestKacky_KackyRecords:
                        records.date,
                        players.login,
                        players.nickname
-                FROM   (SELECT challenge_uid,
-                               Min(score) AS wr
-                        FROM   records
-                        GROUP  BY challenge_uid) toprecords
+                FROM   (SELECT     challenge_uid,
+                                   Min(score) AS wr
+                        FROM       records
+            			INNER JOIN players
+                               ON  records.player_id = players.id
+                            WHERE  players.banned = 0
+                        GROUP  BY  challenge_uid) toprecords
                        INNER JOIN records
                                ON toprecords.challenge_uid = records.challenge_uid
                                   AND toprecords.wr = records.score
@@ -99,6 +102,9 @@ class KackiestKacky_KackyRecords:
                 FROM   (SELECT challenge_uid,
                                Min(score) AS wr
                         FROM   records
+                        INNER JOIN players
+                               ON  records.player_id = players.id
+                            WHERE  players.banned = 0
                         GROUP  BY challenge_uid) toprecords
                        INNER JOIN records
                                ON toprecords.challenge_uid = records.challenge_uid
