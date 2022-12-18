@@ -100,14 +100,7 @@ class NadeoAPI:
         return r.json()["ticket"]
 
     def _get_nadeo_auth_token(self, service, reauth):
-        if not reauth:
-            protocol = "ubi_v1"
-            url = (
-                "https://prod.trackmania.core.nadeo.online/"
-                "v2/authentication/token/ubiservices"
-            )
-            token = self._get_ubi_auth_token()
-        else:
+        if reauth:
             protocol = "nadeo_v1"
             url = (
                 "https://prod.trackmania.core.nadeo.online/"
@@ -122,6 +115,13 @@ class NadeoAPI:
             else:
                 # illegal value for `service`
                 raise ValueError("Bad service name!")
+        else:
+            protocol = "ubi_v1"
+            url = (
+                "https://prod.trackmania.core.nadeo.online/"
+                "v2/authentication/token/ubiservices"
+            )
+            token = self._get_ubi_auth_token()
 
         body = f'{{"audience":"{service}"}}'
         headers = {
