@@ -6,6 +6,9 @@ bind_hosts: 0.0.0.0
 logtype: STDOUT # STDOUT, FILE
 logfile: flask.log # might require absolute path
 loglevel: DEBUG # DEBUG, INFO, WARNING, ERROR, CRITICAL
-logger_name: KKRecords
+logger_name: KackyRecords
+
+kacky_reloaded_club_id: 3074
+tmx_update_frequency: 10  # how many minutes between tmx record updates?
 
 num_db_connections: 15

@@ -7,13 +7,16 @@ from kacky_records_api.db_operators.operators import DBConnection
 from kacky_records_api.record_aggregators.kackiest_kacky_db import (
     KackiestKacky_KackyRecords,
 )
+from kacky_records_api.record_aggregators.nadeo.nadeo_live_services import (
+    NadeoLiveServices,
+)
+from kacky_records_api.record_aggregators.nadeo.nadeo_services import NadeoServices
 from kacky_records_api.record_aggregators.tmnf_exchange import TmnfTmxApi
 
-# from kacky_records_api.record_aggregators.nadeo_webservices import NadeoAPI
-
-
-update_counter = 1
-updating_records_lock = Lock()
+kackiest_update_counter = 1
+reloaded_update_counter = 1
+kackiest_kacky_lock = Lock()
+kacky_reloaded_lock = Lock()
 
 
 def build_score(
@@ -55,139 +58,139 @@ def build_score(
     return res
 
 
-def update_wrs(config, secrets):
-    # Set up logging
-    logger = logging.getLogger(config["logger_name"])
-    logger.setLevel(eval("logging." + config["loglevel"]))
+def check_new_scores(candidates, src: str):
+    update_elements = []
 
-    updating_records_lock.acquire(timeout=2)
-    if not updating_records_lock:
-        logger.info("Could not update wrs. Failed to acquire updating_records_lock!")
-        return
-    global update_counter
+    # set up connection to backend database
+    backend_db = DBConnection(config, secrets)
 
-    def check_new_scores(candidates, src: str):
-        update_elements = []
+    basequery = """
+                SELECT worldrecords.id
+                FROM worldrecords
+                LEFT JOIN maps
+                ON worldrecords.map_id = maps.id
+                WHERE score > ? AND maps.
+                """
+    if src == "tmx":
+        query = basequery + "tmx_id = ?;"
+        for kid, data in candidates.items():
+            a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
+            if a:
+                date = (
+                    dt.strptime(data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f")
+                    if "lastactivity" in data
+                    else dt.fromtimestamp(0)
+                )
+                update_elements.append(
+                    build_score(
+                        kid,
+                        data["wrscore"],
+                        date,
+                        "TMX",
+                        nick=data["wruser"],
+                        tmx_id=data["tid"],
+                    )
+                )
+    elif src == "kkdb":
+        query = basequery + "tm_uid = ?;"
+        for e in candidates:
+            a = backend_db.fetchall(query, (e[4], e[0]))
+            if a:
+                update_elements.append(
+                    build_score(
+                        e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
+                    )
+                )
+    elif src == "dedi":
+        query = basequery + "tmx_id = ?;"
+        for kid, data in candidates.items():
+            a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
+            if a:
+                date = (
+                    dt.strptime(data["lastactivity"], "%Y-%m-%d %H:%M:%S")
+                    if "lastactivity" in data
+                    else dt.fromtimestamp(0)
+                )
+                update_elements.append(
+                    build_score(
+                        kid,
+                        data["wrscore"],
+                        date,
+                        "DEDI",
+                        nick=data["wruser"],
+                        tmx_id=data["tid"],
+                    )
+                )
+    elif src == "kkdb":
+        query = basequery + "tm_uid = ?;"
+        for e in candidates:
+            a = backend_db.fetchall(query, (e[4], e[0]))
+            if a:
+                update_elements.append(
+                    build_score(
+                        e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
+                    )
+                )
 
-        # set up connection to backend database
-        backend_db = DBConnection(config, secrets)
+    return update_elements
 
-        basequery = """
-                    SELECT worldrecords.id
-                    FROM worldrecords
-                    LEFT JOIN maps
-                    ON worldrecords.map_id = maps.id
-                    WHERE score > ? AND maps.
-                    """
-        if src == "tmx":
-            query = basequery + "tmx_id = ?;"
-            for kid, data in candidates.items():
-                a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
-                if a:
-                    date = (
-                        dt.strptime(data["lastactivity"], "%Y-%m-%dT%H:%M:%S.%f")
-                        if "lastactivity" in data
-                        else dt.fromtimestamp(0)
-                    )
-                    update_elements.append(
-                        build_score(
-                            kid,
-                            data["wrscore"],
-                            date,
-                            "TMX",
-                            nick=data["wruser"],
-                            tmx_id=data["tid"],
-                        )
-                    )
-        elif src == "kkdb":
-            query = basequery + "tm_uid = ?;"
-            for e in candidates:
-                a = backend_db.fetchall(query, (e[4], e[0]))
-                if a:
-                    update_elements.append(
-                        build_score(
-                            e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
-                        )
-                    )
-        elif src == "dedi":
-            query = basequery + "tmx_id = ?;"
-            for kid, data in candidates.items():
-                a = backend_db.fetchall(query, (data["wrscore"], data["tid"]))
-                if a:
-                    date = (
-                        dt.strptime(data["lastactivity"], "%Y-%m-%d %H:%M:%S")
-                        if "lastactivity" in data
-                        else dt.fromtimestamp(0)
-                    )
-                    update_elements.append(
-                        build_score(
-                            kid,
-                            data["wrscore"],
-                            date,
-                            "DEDI",
-                            nick=data["wruser"],
-                            tmx_id=data["tid"],
-                        )
-                    )
-        elif src == "kkdb":
-            query = basequery + "tm_uid = ?;"
-            for e in candidates:
-                a = backend_db.fetchall(query, (e[4], e[0]))
-                if a:
-                    update_elements.append(
-                        build_score(
-                            e[1], e[4], e[5], "KKDB", login=e[6], nick=e[7], tm_uid=e[0]
-                        )
-                    )
 
-        return update_elements
-
-    def dedup_new_scores(candidates):
-        # stole stuff from https://stackoverflow.com/a/9835819
-        # quick check for duplicates
-        check_lst = list(map(lambda c: c["kid"], candidates))
-        seen = set()
-        dupes = [x for x in check_lst if x in seen or seen.add(x)]
-        dupes = list(set(dupes))
-        best_score = {}
-        weak_elements = []
-        for d in dupes:
-            for cand in candidates:
-                if d == cand["kid"]:
-                    # kacky track length limited to 10 min
-                    if cand["score"] == best_score.get("score", 15 * 60 * 1000):
-                        # want earliest date
-                        if dt.strptime(cand["date"], "%Y-%m-%d %H:%M:%S") < dt.strptime(
-                            best_score["date"], "%Y-%m-%d %H:%M:%S"
-                        ):
-                            weak_elements.append(best_score)
-                            best_score = cand.copy()
-                        else:
-                            weak_elements.append(cand)
-                    elif cand["score"] < best_score.get("score", 15 * 60 * 1000):
+def dedup_new_scores(candidates):
+    # stole stuff from https://stackoverflow.com/a/9835819
+    # quick check for duplicates
+    check_lst = list(map(lambda c: c["kid"], candidates))
+    seen = set()
+    dupes = [x for x in check_lst if x in seen or seen.add(x)]
+    dupes = list(set(dupes))
+    best_score = {}
+    weak_elements = []
+    for d in dupes:
+        for cand in candidates:
+            if d == cand["kid"]:
+                # kacky track length limited to 10 min
+                if cand["score"] == best_score.get("score", 15 * 60 * 1000):
+                    # want earliest date
+                    if dt.strptime(cand["date"], "%Y-%m-%d %H:%M:%S") < dt.strptime(
+                        best_score["date"], "%Y-%m-%d %H:%M:%S"
+                    ):
                         weak_elements.append(best_score)
                         best_score = cand.copy()
                     else:
                         weak_elements.append(cand)
-                    # candidates.remove(cand)
-            best_score = {}
-        for w in weak_elements:
-            if w == {}:
-                continue
-            candidates.remove(w)
-        return candidates
+                elif cand["score"] < best_score.get("score", 15 * 60 * 1000):
+                    weak_elements.append(best_score)
+                    best_score = cand.copy()
+                else:
+                    weak_elements.append(cand)
+                # candidates.remove(cand)
+        best_score = {}
+    for w in weak_elements:
+        if w == {}:
+            continue
+        candidates.remove(w)
+    return candidates
 
-    logger.info("updating wrs log")
+
+def update_wrs_kackiest_kacky(config, secrets):
+    # Set up logging
+    logger = logging.getLogger(config["logger_name"])
+    logger.setLevel(eval("logging." + config["loglevel"]))
+
+    kackiest_kacky_lock.acquire(timeout=2)
+    if not kackiest_kacky_lock:
+        logger.info("Could not update wrs. Failed to acquire updating_records_lock!")
+        return
+    global kackiest_update_counter
+
+    logger.info("updating KK wrs log")
     kk_upd = KackiestKacky_KackyRecords(secrets)
     tmx_upd = TmnfTmxApi(config)
-    # kr_nadeo_upd = NadeoAPI(secrets["ubisoft_account"], secrets["ubisoft_passwd"])
-    # kr_upd = KackyReloaded_KackyRecords(secrets)
 
     recent_wrs_kk_db = kk_upd.get_recent_world_records()
     recent_wrs_kk_tmx = tmx_upd.get_activity()
     # all_tmx = tmx_upd.get_kacky_wrs()
     # every 10 min check dedimania records
-    if update_counter == 10:
+    if kackiest_update_counter == config["tmx_update_frequency"] - 1:
         all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
     else:
         all_dedi_wrs = {}
@@ -233,5 +236,98 @@ def update_wrs(config, secrets):
                 e["tmx_id"] if "tmx_id" in e else e["tm_uid"],
             ),
         )
-    update_counter = update_counter % 10 + 1
-    updating_records_lock.release()
+    kackiest_update_counter = (kackiest_update_counter + 1) % 10
+    kackiest_kacky_lock.release()
+
+
+def update_wrs_kacky_reloaded(config, secrets):
+    # Set up logging
+    logger = logging.getLogger(config["logger_name"])
+    logger.setLevel(eval("logging." + config["loglevel"]))
+
+    kacky_reloaded_lock.acquire(timeout=2)
+    if not kacky_reloaded_lock:
+        logger.info("Could not update wrs. Failed to acquire updating_records_lock!")
+        return
+    global reloaded_update_counter
+
+    logger.info("updating KR wrs log")
+
+    if secrets["credentials_type"] == "account":
+        nadeo_live_serv = NadeoLiveServices(
+            secrets["ubisoft_account"],
+            secrets["ubisoft_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    elif secrets["credentials_type"] == "dedicated":
+        nadeo_live_serv = NadeoLiveServices(
+            secrets["tm20_dedicated_acc"],
+            secrets["tm20_dedicated_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    else:
+        raise ValueError("Bad Value for 'credentials_type' in secrets.yaml")
+
+    club_campaings = nadeo_live_serv.get_club_campaigns(
+        config["kacky_reloaded_club_id"]
+    )
+
+    """
+    # update all kr maps at once
+    kr_maps = []
+    for campaign in club_campaings:
+        print(campaign["name"])
+        campaing_info = nadeo_live_serv.get_campaign(config["kacky_reloaded_club_id"], campaign["campaignId"])
+        for playlist in campaing_info["campaign"]["playlist"]:
+            kr_maps.append(playlist["mapUid"])
+    print(kr_maps)
+    print(len(kr_maps))
+    """
+
+    # update one campaign every iteration (we dont want to spam Nadeo's API too much)
+    campaing_info = nadeo_live_serv.get_campaign(
+        config["kacky_reloaded_club_id"],
+        club_campaings[reloaded_update_counter]["campaignId"],
+    )
+    campaign_maps = campaing_info["campaign"]["playlist"]
+    print(campaign_maps)
+
+    if secrets["credentials_type"] == "account":
+        nadeo_serv = NadeoServices(
+            secrets["ubisoft_account"],
+            secrets["ubisoft_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    elif secrets["credentials_type"] == "dedicated":
+        nadeo_serv = NadeoServices(
+            secrets["tm20_dedicated_acc"],
+            secrets["tm20_dedicated_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    else:
+        raise ValueError("Bad Value for 'credentials_type' in secrets.yaml")
+    print(nadeo_serv.get_account_display_name("3d803f03-f99a-4784-ad5e-a28ab3740dd3"))
+    return
+
+    reloaded_update_counter = (reloaded_update_counter + 1) % len(club_campaings)
+    kacky_reloaded_lock.release()
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+
+    import yaml
+
+    # Reading config file
+    with open(Path(__file__).parents[2] / "config.yaml", "r") as conffile:
+        config = yaml.load(conffile, Loader=yaml.FullLoader)
+
+    # Read flask secret (required for flask.flash and flask_login)
+    with open(Path(__file__).parents[2] / "secrets.yaml", "r") as secfile:
+        secrets = yaml.load(secfile, Loader=yaml.FullLoader)
+    # update_wrs_kackiest_kacky(config, secrets)
+    update_wrs_kacky_reloaded(config, secrets)

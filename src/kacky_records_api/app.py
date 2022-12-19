@@ -8,7 +8,7 @@ import flask
 import yaml
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
-from update_records import update_wrs
+from update_records import update_wrs_kackiest_kacky
 
 from kacky_records_api.db_operators.operators import DBConnection
 
@@ -95,13 +95,13 @@ if __name__ == "__main__":
 
     # setup schedule to update wrs
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_wrs, trigger="interval", seconds=60)
+    scheduler.add_job(func=update_wrs_kackiest_kacky, trigger="interval", seconds=60)
     # start scheduler
     scheduler.start()
     # shutdown scheduler on exit
     atexit.register(lambda: scheduler.shutdown())
 
     # initial wr update on start
-    update_wrs(config, secrets)
+    update_wrs_kackiest_kacky(config, secrets)
 
     app.run(host=config["bind_hosts"], port=config["port"])

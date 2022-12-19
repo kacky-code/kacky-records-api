@@ -10,12 +10,26 @@ AUDIENCES = ["NadeoServices", "NadeoLiveServices", "NadeoClubServices"]
 
 class AuthenticationHandler:
     """
-    Handles all auth tokens and their updates for queries to Nadeo services
+    Singleton. Handles all auth tokens and their updates for queries to Nadeo services
     """
 
-    def __init__(self, user: str, pwd: str, accounttype: str):
+    def __new__(cls, user: str, pwd: str, accounttype: str, user_agent: str):
+        if not hasattr(cls, "_instance"):
+            print("creating new AuthenticationHandler")
+            cls._instance = super(AuthenticationHandler, cls).__new__(cls)
+        print("Returning AuthenticationHandler: " + str(cls._instance))
+        return cls._instance
+
+    def __init__(self, user: str, pwd: str, accounttype: str, user_agent: str):
+        if not hasattr(self, "_nadeo_tokens"):
+            self.__singleton__init__(user, pwd, accounttype, user_agent)
+
+    def __singleton__init__(
+        self, user: str, pwd: str, accounttype: str, user_agent: str
+    ):
         self._credentials = (user, pwd)
         self._accounttype = accounttype
+        self.useragent = user_agent
         if accounttype == "dedicated":
             self._nadeo_api_url = "https://prod.trackmania.core.nadeo.online/v2/authentication/token/basic"
             self._auth_protocol = "nadeo_v1"
@@ -44,7 +58,7 @@ class AuthenticationHandler:
         headers = {
             "Ubi-AppId": "86263886-327a-4328-ac69-527f0d20a237",
             "Content-Type": "application/json",
-            "User-Agent": "Kacky WR Tracker / cork@dingens.me",
+            "User-Agent": self.useragent,
         }
 
         # Post to Ubisoft
