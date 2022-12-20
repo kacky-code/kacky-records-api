@@ -20,27 +20,13 @@ class NadeoLiveServices:
         result = requests.get(url, headers=headers)
         return result.json()
 
-    def get_leaders_for_map(self, mapuid):
-        url = f"https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/{mapuid}/top"
+    def get_worldrecord_for_map(self, mapuid):
+        url = (
+            f"https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/{mapuid}"
+            "/top?length=1&onlyWorld=True"
+        )
         leaders = self._request_executor(url)
         return leaders
-
-    def get_worldrecord_for_map(self, mapuid):
-        leaders = self.get_leaders_for_map(mapuid)
-        zone = None
-        for top in leaders["tops"]:
-            if top["zoneName"] == "World":
-                zone = top["top"]
-                break
-
-        for rec in zone:
-            if rec["position"] == 1:
-                return {
-                    "mapuid": leaders["mapUid"],
-                    "accountId": zone["accountId"],
-                    "score": zone["score"],
-                }
-        return {}
 
     def get_club_activities(
         self, club_id: int, get_inactive: bool = False, length: int = 64
