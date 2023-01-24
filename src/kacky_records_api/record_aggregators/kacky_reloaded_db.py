@@ -129,6 +129,38 @@ class KackyReloaded_KackyRecords:
         self.cursor.execute(query)
         return self.cursor.fetchall()
 
+    def get_user_pbs(self, user: str):
+        q = """
+            SELECT
+                kackychallenges.name,
+                pbs.score,
+                pbs.created_at,
+                pbs.kacky_rank
+            FROM (
+                SELECT
+                    localrecord.map_id,
+                    localrecord.score,
+                    localrecord.created_at,
+                    player.nickname,
+                    player.login,
+                    player.uplay_nickname,
+                    RANK() OVER (
+                        PARTITION BY localrecord.map_id
+                        ORDER BY localrecord.score, localrecord.created_at ASC
+                    ) AS kacky_rank
+                FROM localrecord
+                INNER JOIN player ON localrecord.player_id = player.id
+            ) AS pbs
+            INNER JOIN kackychallenges ON pbs.map_id = kackychallenges.id
+            WHERE pbs.uplay_nickname = ?;
+        """
+        self.cursor.execute(q, (user,))
+        qres = self.cursor.fetchall()
+        # replace \u2013 with - in map name
+        return list(
+            map(lambda elem: [elem[0].replace("\u2013", "-")] + list(elem[1:]), qres)
+        )
+
 
 def datetimetostr(dictin):
     dictin["date"] = dictin["date"].strftime("%m/%d/%Y, %H:%M:%S")

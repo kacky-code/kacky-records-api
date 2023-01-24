@@ -11,6 +11,13 @@ from flask_cors import CORS
 from update_records import update_wrs_kackiest_kacky, update_wrs_kacky_reloaded
 
 from kacky_records_api.db_operators.operators import DBConnection
+from kacky_records_api.record_aggregators.kackiest_kacky_db import (
+    KackiestKacky_KackyRecords,
+)
+from kacky_records_api.record_aggregators.kacky_reloaded_db import (
+    KackyReloaded_KackyRecords,
+)
+from kacky_records_api.tm_string.tm_format_resolver import TMstr
 
 app = flask.Flask(__name__)
 CORS(app)
@@ -54,8 +61,37 @@ def wrs_per_event(event, edition):
 def get_all_events():
     # set up connection to backend database
     backend_db = DBConnection(config, secrets)
-    events = backend_db.fetchone("SELECT name, shortname FROM events;")
+    events_query_result = backend_db.fetchall(
+        "SELECT name, type, edition FROM events;", ()
+    )
+    events = [
+        {"name": TMstr(ev[0]).string, "type": ev[1], "edition": ev[2]}
+        for ev in events_query_result
+    ]
     return json.dumps(events)
+
+
+@app.route("/pb/<user>/<event>")
+def get_user_pbs(user: str, event: str):
+    if event.upper() == "KK":
+        pbs = KackiestKacky_KackyRecords(secrets).get_user_pbs(user)
+    elif event.upper() == "KR":
+        pbs = KackyReloaded_KackyRecords(secrets).get_user_pbs(user)
+    else:
+        return "ERROR, invalid params"
+    return (
+        json.dumps(
+            {
+                TMstr(x[0]).string.split("#")[1]: {
+                    "score": x[1],
+                    "kacky_rank": x[3],
+                    "date": x[2].timestamp(),
+                }
+                for x in pbs
+            }
+        ),
+        200,
+    )
 
 
 if __name__ == "__main__":
