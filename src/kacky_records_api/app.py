@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import flask
 import yaml
@@ -33,8 +34,7 @@ def root():
 @app.route("/wrs/<event>/<edition>")
 def wrs_per_event(event, edition):
     # check if parameters are valid (this also is input sanitation)
-    if isinstance(event, str) and edition.isdigit() and event in ["kk", "kr"]:
-        return "Error: bad path", 404
+    check_event_edition_legal(event, edition)
     # set up connection to backend database
     backend_db = DBConnection(config, secrets)
     # check if event exists
@@ -73,6 +73,7 @@ def get_all_events():
 
 @app.route("/pb/<user>/<event>")
 def get_user_pbs(user: str, event: str):
+    check_event_edition_legal(event, 1)
     if event.upper() == "KK":
         pbs = KackiestKacky_KackyRecords(secrets).get_user_pbs(user)
     elif event.upper() == "KR":
@@ -92,6 +93,14 @@ def get_user_pbs(user: str, event: str):
         ),
         200,
     )
+
+
+def check_event_edition_legal(event: Any, edition: Any):
+    # check if parameters are valid (this also is input sanitation)
+    if isinstance(event, str) and edition.isdigit() and event in ["kk", "kr"]:
+        # Allowed arguments
+        return True
+    raise AssertionError
 
 
 if __name__ == "__main__":
