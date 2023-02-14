@@ -71,12 +71,12 @@ def get_all_events():
     return json.dumps(events)
 
 
-@app.route("/pb/<user>/<event>")
-def get_user_pbs(user: str, event: str):
-    check_event_edition_legal(event, 1)
-    if event.upper() == "KK":
+@app.route("/pb/<user>/<eventtype>")
+def get_user_pbs(user: str, eventtype: str):
+    check_event_edition_legal(eventtype, "1")
+    if eventtype.upper() == "KK":
         pbs = KackiestKacky_KackyRecords(secrets).get_user_pbs(user)
-    elif event.upper() == "KR":
+    elif eventtype.upper() == "KR":
         pbs = KackyReloaded_KackyRecords(secrets).get_user_pbs(user)
     else:
         return "ERROR, invalid params"
@@ -93,6 +93,18 @@ def get_user_pbs(user: str, event: str):
         ),
         200,
     )
+
+
+@app.route("/performance/<login>/<eventtype>")
+def get_user_fin_count(login: str, eventtype: str):
+    check_event_edition_legal(eventtype, "1")
+    if eventtype.upper() == "KK":
+        fins = KackiestKacky_KackyRecords(secrets).get_user_fin_count(login)
+    elif eventtype.upper() == "KR":
+        fins = KackyReloaded_KackyRecords(secrets).get_user_fin_count(login)
+    else:
+        return "ERROR, invalid params"
+    return json.dumps(fins), 200
 
 
 def check_event_edition_legal(event: Any, edition: Any):
@@ -158,7 +170,7 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
 
     # initial wr update on start
-    update_wrs_kackiest_kacky(config, secrets)
-    update_wrs_kacky_reloaded(config, secrets)
+    #update_wrs_kackiest_kacky(config, secrets)
+    #update_wrs_kacky_reloaded(config, secrets)
 
     app.run(host=config["bind_hosts"], port=config["port"])

@@ -64,10 +64,14 @@ class NadeoLiveServices:
         activities = self.get_club_activities(club_id, get_inactive, length)
 
         rooms = []
-
-        for activity in activities["activityList"]:
-            if activity["activityType"] == "room":
-                rooms.append(activity)
+        
+        try:
+            for activity in activities["activityList"]:
+                if activity["activityType"] == "room":
+                    rooms.append(activity)
+        except:
+            # TODO: add logging here. no key "activityList" in dict for some reason
+            pass 
         return rooms
 
     def get_club_skin_uploads(

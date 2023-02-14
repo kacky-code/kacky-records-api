@@ -211,16 +211,16 @@ def update_wrs_kackiest_kacky(config, secrets):
     recent_wrs_kk_tmx = tmx_upd.get_activity()
     # all_tmx = tmx_upd.get_kacky_wrs()
     # every 10 min check dedimania records
-    if kackiest_update_counter == config["tmx_update_frequency"] - 1:
-        all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
-    else:
-        all_dedi_wrs = {}
+    # if kackiest_update_counter == config["tmx_update_frequency"] - 1:
+    #     all_dedi_wrs = tmx_upd.get_all_kacky_dedimania_wrs()
+    # else:
+    #     all_dedi_wrs = {}
 
     update_wrs_kk = []
     update_wrs_kk += check_new_scores(recent_wrs_kk_db, "kkdb", config, secrets)
     update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx", config, secrets)
     # update_wrs_kk += check_new_scores(all_tmx, "tmx")
-    update_wrs_kk += check_new_scores(all_dedi_wrs, "dedi", config, secrets)
+    # update_wrs_kk += check_new_scores(all_dedi_wrs, "dedi", config, secrets)
     update_wrs_kk_dedup = dedup_new_scores(update_wrs_kk)
 
     # set up connection to backend database
@@ -334,10 +334,13 @@ def update_wrs_kacky_reloaded(config, secrets):
 
     scores = []
     for cmap in campaign_maps:
-        mapscore = nadeo_live_serv.get_worldrecord_for_map(cmap["mapUid"])["tops"][0][
-            "top"
-        ][0]
-        player = nadeo_serv.get_account_display_name(mapscore["accountId"])[0]
+        try:
+            mapscore = nadeo_live_serv.get_worldrecord_for_map(cmap["mapUid"])["tops"][0][
+                "top"
+            ][0]
+            player = nadeo_serv.get_account_display_name(mapscore["accountId"])[0]
+        except Exception as e:
+            logger.error(f"Error in updating data from Nadeo! {e}")
         scores.append(
             build_score(
                 mapscore["score"],

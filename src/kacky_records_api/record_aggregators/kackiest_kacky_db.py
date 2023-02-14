@@ -218,6 +218,21 @@ class KackiestKacky_KackyRecords:
             map(lambda elem: [elem[0].replace("\u2013", "-")] + list(elem[1:]), qres)
         )
 
+    def get_user_fin_count(self, tmlogin: str):
+        q = """
+            SELECT edition, edition_finishes FROM (
+                SELECT challenges.edition, COUNT(*) OVER (PARTITION BY challenges.edition) AS edition_finishes
+                FROM records
+                INNER JOIN players ON records.player_id = players.id
+                INNER JOIN challenges ON records.challenge_id = challenges.id
+                WHERE players.login = ?
+            ) AS counter
+            GROUP BY edition;
+        """
+        self.cursor.execute(q, (tmlogin,))
+        qres = self.cursor.fetchall()
+        return [{"edition": r[0], "fins": r[1]} for r in qres]
+
 
 def datetimetostr(dictin):
     dictin["date"] = dictin["date"].strftime("%m/%d/%Y, %H:%M:%S")
