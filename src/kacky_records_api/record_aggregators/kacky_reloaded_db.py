@@ -16,7 +16,6 @@ class KackyReloaded_KackyRecords:
                 passwd=secrets["krdb_passwd"],
                 database=secrets["krdb_db"],
             )
-            print("Connection to MySQL DB successful")
         except mariadb.Error as e:
             print(f"The error '{e}' occurred")
             exit(-1)

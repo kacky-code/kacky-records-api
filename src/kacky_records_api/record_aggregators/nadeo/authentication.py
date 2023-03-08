@@ -17,7 +17,6 @@ class AuthenticationHandler:
         if not hasattr(cls, "_instance"):
             print("creating new AuthenticationHandler")
             cls._instance = super(AuthenticationHandler, cls).__new__(cls)
-        print("Returning AuthenticationHandler: " + str(cls._instance))
         return cls._instance
 
     def __init__(self, user: str, pwd: str, accounttype: str, user_agent: str):

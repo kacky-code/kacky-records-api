@@ -246,7 +246,6 @@ def open_db_connection():
         connection = mariadb.connect(
             host="localhost", user=dbuser, passwd=dbpw, database="kacky_backend_rebuild"
         )
-        print("Connection to MySQL DB successful")
     except mariadb.Error as e:
         print(f"The error '{e}' occurred")
         exit(-1)
