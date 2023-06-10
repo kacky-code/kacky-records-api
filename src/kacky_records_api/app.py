@@ -9,6 +9,9 @@ import flask
 import yaml
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask_cors import CORS
+
+# from kacky_records_api.tm_string.tm_format_resolver import TMstr
+from tmformatresolver import TMString
 from update_records import update_wrs_kackiest_kacky, update_wrs_kacky_reloaded
 
 from kacky_records_api.db_operators.operators import DBConnection
@@ -18,7 +21,6 @@ from kacky_records_api.record_aggregators.kackiest_kacky_db import (
 from kacky_records_api.record_aggregators.kacky_reloaded_db import (
     KackyReloaded_KackyRecords,
 )
-from kacky_records_api.tm_string.tm_format_resolver import TMstr
 
 app = flask.Flask(__name__)
 CORS(app)
@@ -65,7 +67,7 @@ def get_all_events():
         "SELECT name, type, edition FROM events;", ()
     )
     events = [
-        {"name": TMstr(ev[0]).string, "type": ev[1], "edition": ev[2]}
+        {"name": TMString(ev[0]).string, "type": ev[1], "edition": ev[2]}
         for ev in events_query_result
     ]
     return json.dumps(events)
@@ -83,7 +85,31 @@ def get_user_pbs(user: str, eventtype: str):
     return (
         json.dumps(
             {
-                TMstr(x[0]).string.split("#")[1]: {
+                TMString(x[0]).string.split("#")[1]: {
+                    "score": x[1],
+                    "kacky_rank": x[3],
+                    "date": x[2].timestamp(),
+                }
+                for x in pbs
+            }
+        ),
+        200,
+    )
+
+
+@app.route("/pb/<user>/<eventtype>/<edition>")
+def get_user_pbs_edition(user: str, eventtype: str, edition: int):
+    check_event_edition_legal(eventtype, edition)
+    if eventtype.upper() == "KK":
+        pbs = KackiestKacky_KackyRecords(secrets).get_user_pbs_edition(user, edition)
+    elif eventtype.upper() == "KR":
+        pbs = KackyReloaded_KackyRecords(secrets).get_user_pbs_edition(user, edition)
+    else:
+        return "ERROR, invalid params"
+    return (
+        json.dumps(
+            {
+                TMString(x[0]).string.split("#")[1]: {
                     "score": x[1],
                     "kacky_rank": x[3],
                     "date": x[2].timestamp(),
@@ -105,6 +131,33 @@ def get_user_fin_count(login: str, eventtype: str):
     else:
         return "ERROR, invalid params"
     return json.dumps(fins), 200
+
+
+@app.route("/event/leaderboard/<eventtype>/<edition>")
+def get_leaderboard(eventtype: str, edition: int):
+    check_event_edition_legal(eventtype, edition)
+    startrank = flask.request.args.get("start", default=0, type=int)
+    elems = flask.request.args.get("elems", default=1, type=int)
+    if eventtype.upper() == "KK":
+        lb = KackiestKacky_KackyRecords(secrets).get_leaderboard(
+            edition, startrank, elems, html=True
+        )
+    else:
+        return "KR not yet implemented"
+    return lb, 200
+    return json.dumps(lb), 200
+
+
+@app.route("/event/leaderboard/<eventtype>/<edition>/<login>")
+def get_player_rank(eventtype: str, edition: int, login: str):
+    check_event_edition_legal(eventtype, edition)
+    if eventtype.upper() == "KK":
+        lb = KackiestKacky_KackyRecords(secrets).get_login_rank(
+            edition, login, html=True
+        )
+    else:
+        return "KR not yet implemented"
+    return json.dumps(lb), 200
 
 
 def check_event_edition_legal(event: Any, edition: Any):
@@ -170,7 +223,7 @@ if __name__ == "__main__":
     atexit.register(lambda: scheduler.shutdown())
 
     # initial wr update on start
-    #update_wrs_kackiest_kacky(config, secrets)
-    #update_wrs_kacky_reloaded(config, secrets)
+    # update_wrs_kackiest_kacky(config, secrets)
+    # update_wrs_kacky_reloaded(config, secrets)
 
     app.run(host=config["bind_hosts"], port=config["port"])
