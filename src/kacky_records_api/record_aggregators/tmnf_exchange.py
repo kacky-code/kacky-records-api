@@ -24,14 +24,14 @@ class TmnfTmxApi:
         return r.json()
 
     def get_kacky_wrs(self, raw=False):
-        # https://tmnf.exchange/api/tracks?author=%23masters+of+kacky&count=40&
+        # https://tmnf.exchange/api/tracks?authoruserid=6655156&count=40&
         # fields=TrackId%2CTrackName%2CAuthors%5B%5D%2CTags%5B%5D%2CAuthorTime%
         # 2CRoutes%2CDifficulty%2CEnvironment%2CCar%2CPrimaryType%2CMood%2CAwar
         # ds%2CHasThumbnail%2CImages%5B%5D%2CIsPublic%2CWRReplay.User.UserId%2C
         # WRReplay.User.Name%2CWRReplay.ReplayTime%2CWRReplay.ReplayScore%2CRep
         # layType%2CUploader.UserId%2CUploader.Name"
         urn = (
-            "tracks?author=%23masters+of+kacky&count=99999&fields=TrackId"
+            "tracks?authoruserid=6655156&count=99999&fields=TrackId"
             "%2CTrackName%2CWRReplay.User.Name%2CWRReplay.ReplayTime"
         )
         try:
@@ -58,7 +58,7 @@ class TmnfTmxApi:
     def get_activity(self, raw=False):
         # https://api2.mania.exchange/Method/Index/43
         urn = (
-            "tracks?author=%23masters+of+kacky&count=20&order1=10&fields=TrackId"
+            "tracks?authoruserid=6655156&count=20&order1=10&fields=TrackId"
             "%2CTrackName%2CWRReplay.User.Name%2CWRReplay.ReplayTime%2CActivityAt"
         )
         try:
@@ -86,7 +86,7 @@ class TmnfTmxApi:
 
     def get_kacky_tmx_ids(self):
         kacky_maps = (
-            "https://tmnf.exchange/api/tracks?author=%23masters+of+kacky&"
+            "https://tmnf.exchange/api/tracks?authoruserid=6655156&"
             "count=1000&fields=TrackId%2CTrackName"
         )
         try:
