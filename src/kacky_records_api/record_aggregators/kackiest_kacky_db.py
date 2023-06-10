@@ -2,6 +2,9 @@ import datetime
 
 import mariadb
 
+# from kacky_records_api.tm_string.tm_format_resolver import TMString
+from tmformatresolver import TMString
+
 
 class KackiestKacky_KackyRecords:
     def __init__(self, secrets):
@@ -232,6 +235,191 @@ class KackiestKacky_KackyRecords:
         self.cursor.execute(q, (tmlogin,))
         qres = self.cursor.fetchall()
         return [{"edition": r[0], "fins": r[1]} for r in qres]
+
+    def get_user_pbs_edition(self, tmlogin, edition):
+        query = """
+        SELECT challenges.name, pbs.score, pbs.date, pbs.kacky_rank
+        FROM (
+            SELECT
+                records.challenge_id,
+                records.score,
+                records.date,
+                players.nickname,
+                players.login,
+                RANK() OVER (
+                    PARTITION BY records.challenge_id
+                    ORDER BY records.score, records.date ASC
+                ) AS kacky_rank
+                FROM records
+                INNER JOIN players ON records.player_id = players.id
+                INNER JOIN challenges ON records.challenge_id = challenges.id
+                WHERE players.banned = 0 AND challenges.edition = ?
+        ) AS pbs
+        INNER JOIN challenges ON pbs.challenge_id = challenges.id
+        WHERE pbs.login = ?;
+        """
+        self.cursor.execute(query, (edition, tmlogin))
+        qres = self.cursor.fetchall()
+        # replace \u2013 with - in map name
+        return list(
+            map(lambda elem: [elem[0].replace("\u2013", "-")] + list(elem[1:]), qres)
+        )
+
+    def get_player_avg_edition(self, edition, login):
+        query = """
+            SELECT challenges.name, pbs.score, pbs.date, AVG(pbs.kacky_rank)
+            FROM (
+                SELECT
+                    records.challenge_id,
+                    records.score,
+                    records.date,
+                    players.nickname,
+                    players.login,
+                    RANK() OVER (
+                        PARTITION BY records.challenge_id
+                        ORDER BY records.score, records.date ASC
+                    ) AS kacky_rank
+                    FROM records
+                    INNER JOIN players ON records.player_id = players.id
+                    INNER JOIN challenges ON records.challenge_id = challenges.id
+                    WHERE players.banned = 0 AND challenges.edition = ?
+            ) AS pbs
+            INNER JOIN challenges ON pbs.challenge_id = challenges.id
+            WHERE pbs.login = ?;
+        """
+        self.cursor.execute(query, (edition, login))
+        qres = self.cursor.fetchall()
+        return qres
+
+    def get_leaderboard(
+        self,
+        edition,
+        startrank: int = 1,
+        endrank: int = 1,
+        html: bool = False,
+        raw: bool = False,
+        force: bool = False,
+    ):
+        if endrank - startrank > 100 and not force:
+            raise ValueError("Range of ranks to big!")
+        query = """
+            SELECT
+                COUNT(DISTINCT challenge_uid) as fins,
+                players.login as llogin,
+                players.nickname as lnick,
+                players.id as lpid,
+                (
+                SELECT AVG(pbs.kacky_rank)
+                    FROM (
+                        SELECT
+                            records.challenge_id,
+                            records.score,
+                            records.date,
+                            players.nickname,
+                            players.login,
+                            RANK() OVER (
+                                PARTITION BY records.challenge_id
+                                ORDER BY records.score, records.date ASC
+                            ) AS kacky_rank
+                            FROM records
+                            INNER JOIN players ON records.player_id = players.id
+                            INNER JOIN challenges ON records.challenge_id = challenges.id
+                            WHERE players.banned = 0 AND challenges.edition = ? AND server_id IN (1, 22,23,24,25)
+                    ) AS pbs
+                    INNER JOIN challenges ON pbs.challenge_id = challenges.id
+                    WHERE pbs.login = llogin
+                ) as ev_avg
+            FROM records
+            INNER JOIN challenges ON records.challenge_uid = challenges.uid
+            INNER JOIN players ON players.id = player_id
+            WHERE edition = 8 AND server_id IN (1, 22,23,24,25)
+            GROUP BY player_id
+            ORDER BY fins DESC, ev_avg ASC
+            LIMIT ?, ?;
+        """
+        self.cursor.execute(
+            query,
+            (
+                edition,
+                startrank,
+                (endrank - startrank if endrank - startrank > 0 else 1),
+            ),
+        )
+        qres = self.cursor.fetchall()
+        if raw:
+            return qres
+        if html:
+            return [
+                {
+                    "login": elem[1],
+                    "nick": TMString(elem[2]).html,
+                    "fins": elem[0],
+                    "avg": float(elem[4]),
+                }
+                for elem in qres
+            ]
+        return [
+            {"login": elem[1], "nick": elem[2], "fins": elem[0], "avg": float(elem[4])}
+            for elem in qres
+        ]
+
+    def get_login_rank(self, edition, login, html: bool = False):
+        leaderboard = self.get_leaderboard(
+            edition, startrank=0, endrank=100000, force=True, raw=True
+        )
+        rank = 1
+        for elem in leaderboard:
+            if elem[1] == login:
+                break
+            rank += 1
+        # inequality when login not found in leaderboard. return empty dict
+        if login != elem[1]:
+            return {}
+        if html:
+            return {
+                "rank": rank,
+                "login": elem[1],
+                "nick": TMString(elem[2]).html,
+                "fins": elem[0],
+                "avg": float(elem[4]),
+            }
+        return {
+            "rank": rank,
+            "login": elem[1],
+            "nick": elem[2],
+            "fins": elem[0],
+            "avg": float(elem[4]),
+        }
+
+    def get_user_pbs_event(self, edition):
+        # QUERY
+        # CONTAINS
+        # HARDCODED
+        # LOGIN!!
+        query = """
+        SELECT challenges.name, pbs.score, pbs.date, pbs.kacky_rank
+        FROM (
+            SELECT
+                times.challenge_id,
+                times.score,
+                times.date,
+                players.nickname,
+                players.login,
+                RANK() OVER (
+                    PARTITION BY times.challenge_id
+                    ORDER BY times.score, times.date ASC
+                ) AS kacky_rank
+                FROM times
+                INNER JOIN players ON times.player_id = players.id
+                INNER JOIN challenges ON times.challenge_id = challenges.id
+                WHERE players.banned = 0 AND challenges.edition = 8 AND server_id IN (1, 22,23,24,25)
+        ) AS pbs
+        INNER JOIN challenges ON pbs.challenge_id = challenges.id
+        WHERE pbs.login = "simo_900";
+        """
+        self.cursor.execute(query, (edition,))
+        qres = self.cursor.fetchall()
+        return qres
 
 
 def datetimetostr(dictin):
