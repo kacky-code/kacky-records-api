@@ -219,7 +219,7 @@ def update_wrs_kackiest_kacky(config, secrets):
     update_wrs_kk = []
     update_wrs_kk += check_new_scores(recent_wrs_kk_db, "kkdb", config, secrets)
     update_wrs_kk += check_new_scores(recent_wrs_kk_tmx, "tmx", config, secrets)
-    # update_wrs_kk += check_new_scores(all_tmx, "tmx")
+    # update_wrs_kk += check_new_scores(all_tmx, "tmx", config, secrets)
     # update_wrs_kk += check_new_scores(all_dedi_wrs, "dedi", config, secrets)
     update_wrs_kk_dedup = dedup_new_scores(update_wrs_kk)
 
@@ -275,6 +275,23 @@ def update_wrs_kacky_reloaded(config, secrets):
     logger.info("updating KR wrs log")
 
     if secrets["credentials_type"] == "account":
+        nadeo_serv = NadeoServices(
+            secrets["ubisoft_account"],
+            secrets["ubisoft_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    elif secrets["credentials_type"] == "dedicated":
+        nadeo_serv = NadeoLiveServices(
+            secrets["tm20_dedicated_acc"],
+            secrets["tm20_dedicated_passwd"],
+            secrets["credentials_type"],
+            secrets["ubisoft-user-agent"],
+        )
+    else:
+        raise ValueError("Bad Value for 'credentials_type' in secrets.yaml")
+
+    if secrets["credentials_type"] == "account":
         nadeo_live_serv = NadeoLiveServices(
             secrets["ubisoft_account"],
             secrets["ubisoft_passwd"],
@@ -313,34 +330,23 @@ def update_wrs_kacky_reloaded(config, secrets):
         club_campaings[reloaded_update_counter]["campaignId"],
     )
     campaign_maps = campaing_info["campaign"]["playlist"]
-    print(campaing_info["name"])
-
-    if secrets["credentials_type"] == "account":
-        nadeo_serv = NadeoServices(
-            secrets["ubisoft_account"],
-            secrets["ubisoft_passwd"],
-            secrets["credentials_type"],
-            secrets["ubisoft-user-agent"],
-        )
-    elif secrets["credentials_type"] == "dedicated":
-        nadeo_serv = NadeoServices(
-            secrets["tm20_dedicated_acc"],
-            secrets["tm20_dedicated_passwd"],
-            secrets["credentials_type"],
-            secrets["ubisoft-user-agent"],
-        )
-    else:
-        raise ValueError("Bad Value for 'credentials_type' in secrets.yaml")
+    logger.info(campaing_info["name"])
 
     scores = []
     for cmap in campaign_maps:
         try:
-            mapscore = nadeo_live_serv.get_worldrecord_for_map(cmap["mapUid"])["tops"][0][
-                "top"
-            ][0]
+            mapscore = nadeo_live_serv.get_worldrecord_for_map(cmap["mapUid"])["tops"][
+                0
+            ]["top"][0]
             player = nadeo_serv.get_account_display_name(mapscore["accountId"])[0]
         except Exception as e:
             logger.error(f"Error in updating data from Nadeo! {e}")
+            logger.error(cmap)
+            logger.error(mapscore)
+            logger.error(player)
+            continue
+        #            kacky_reloaded_lock.release()
+        #            return
         scores.append(
             build_score(
                 mapscore["score"],
@@ -352,14 +358,59 @@ def update_wrs_kacky_reloaded(config, secrets):
         )
 
     update_scores = check_new_scores(scores, "nado", config, secrets)
-    print(f"found {len(scores)} wrs. updating {len(update_scores)}.")
+
+    # DEBUGGING BAD RESPONSES FROM NADEO START
+    # Double check new WR, because Nadeo is Nadeo
+    if update_scores:
+        for u in update_scores:
+            try:
+                mapscore = nadeo_live_serv.get_worldrecord_for_map(u["tm_uid"])["tops"][
+                    0
+                ]["top"][0]
+                player = nadeo_serv.get_account_display_name(mapscore["accountId"])[0]
+                comp = build_score(
+                    mapscore["score"],
+                    u["date"],
+                    "NADO",
+                    login=player["displayName"],
+                    tm_uid=mapscore["tm_uid"],
+                )
+                if not (
+                    u["score"] == comp["score"]
+                    and u["login"] == comp["login"]
+                    and u["tm_uid"] == comp["tm_uid"]
+                ):
+                    logger.error(
+                        f"Incoherent data in update. First update produced dict {u}"
+                        f" - second update produced {comp}."
+                    )
+                    with open(
+                        "/var/www/flask/kacky-records-api/bad_wr_updates.txt", "a+"
+                    ) as log:
+                        log.write(dt.now().strftime("%Y.%m.%d %H:%M:%S"))
+                        log.write(
+                            f"Incoherent data in update. First update produced dict {u}"
+                            f" - second update produced {comp}.\n"
+                        )
+                    # ABORT completely. Fine for debugging
+                    # TODO: change it this shall remain permanent
+                    # reloaded_update_counter = (reloaded_update_counter + 1) % len(club_campaings)
+                    kacky_reloaded_lock.release()
+                    return
+            except Exception as e:
+                logger.error(f"Error in double check! {e}")
+                logger.error(u)
+                logger.error(mapscore)
+                logger.error(player)
+    # DEBUGGING BAD RESPONSES FROM NADEO END
+
     # no deduplication needed, as we have only one data source
 
     # set up connection to backend database
     backend_db = DBConnection(config, secrets)
 
     for new_wr in update_scores:
-        print(f"updating in DB: {new_wr}")
+        logger.info(f"updating in DB: {new_wr}")
         query_discord = """
                     UPDATE worldrecords_discord_notify AS wr_not
                     LEFT JOIN worldrecords AS wr
