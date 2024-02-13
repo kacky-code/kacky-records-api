@@ -80,6 +80,22 @@ class TmnfTmxApi:
             for m in r.json()["Results"]
         }
 
+    def get_map_wr(self, map_id: int, raw=False):
+        # https://tmnf.exchange/api/tracks?id=7255006&count=20&order1=10&
+        # fields=TrackId%2CTrackName%2CWRReplay.User.Name%2CWRReplay.ReplayTime%2CActivityAt
+        urn = f"tracks?id={map_id}&fields=WRReplay.User.Name%2CWRReplay.ReplayTime"
+        try:
+            r = requests.get(self.BASEURL + urn, timeout=10)
+        except requests.exceptions.RequestException:
+            self._logger.error("Error connecting to TMX!")
+            return {}
+        if raw:
+            return r.json()
+        return (
+            r.json()["Results"][0]["WRReplay"]["User"]["Name"],
+            r.json()["Results"][0]["WRReplay"]["ReplayTime"],
+        )
+
     def get_map_thumbnail(self, tmxid):
         url = f"https://tmnf.exchange/trackshow/{tmxid}/image/1"
         return url

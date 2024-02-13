@@ -83,6 +83,9 @@ class KackiestKacky_KackyRecords:
                     wrs[rec["kid"]] = rec
                     # remove duplicate data from datastructure
                     wrs[rec["kid"]].pop("kid")
+        # wrs_list = [
+        #   (v["uid"], v["name"], v["edition"], v["author"], v["score"], v["date"], v["login"], v["nick"]
+        # ) for v in wrs.values()]
         return wrs
 
     def get_recent_world_records(
