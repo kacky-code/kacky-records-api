@@ -1,11 +1,13 @@
-# FASTAPI PARAMETERS
+# FLASK/GUNICORN PARAMETERS
 port: 8000
-bind_hosts: 0.0.0.0
+bind_hosts: 127.0.0.1
+workers: 8
+threads: 4
 
 # LOGGING
 logtype: STDOUT # STDOUT, FILE
 logfile: flask.log # might require absolute path
-loglevel: DEBUG # DEBUG, INFO, WARNING, ERROR, CRITICAL
+loglevel: INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
 logger_name: KackyRecords
 
 kacky_reloaded_club_id: 3074
