@@ -1,10 +1,11 @@
-import logging
 from datetime import datetime as dt
 from threading import Lock
 from typing import Dict, Union
 
 from nadeo_api import NadeoAPI
+from tmformatresolver import TMString
 
+from kacky_records_api import logger
 from kacky_records_api.db_operators.operators import DBConnection
 from kacky_records_api.record_aggregators.kackiest_kacky_db import (
     KackiestKacky_KackyRecords,
@@ -14,7 +15,7 @@ from kacky_records_api.record_aggregators.kackiest_kacky_db import (
 from kacky_records_api.record_aggregators.tmnf_exchange import TmnfTmxApi
 
 kackiest_update_counter = 1
-reloaded_update_counter = 1
+reloaded_update_counter = 4
 reloaded_update_counter_onlyevent = 1
 kackiest_kacky_lock = Lock()
 kacky_reloaded_lock = Lock()
@@ -63,8 +64,6 @@ def build_score(
 
 
 def check_new_scores(candidates, src: str, config, secrets):
-    logger = logging.getLogger(config["logger_name"])
-    logger.setLevel(eval("logging." + config["loglevel"]))
     update_elements = []
 
     # set up connection to backend database
@@ -208,11 +207,70 @@ def dedup_new_scores(candidates):
     return candidates
 
 
-def update_wrs_kackiest_kacky(config, secrets):
-    # Set up logging
-    logger = logging.getLogger(config["logger_name"])
-    logger.setLevel(eval("logging." + config["loglevel"]))
+def write_wr_to_db(db_cursor, this_new_wr):
+    logger.info(f"updating in DB: {this_new_wr}")
+    # get old date
+    query = f"""
+                SELECT date, login, nickname
+                FROM worldrecords AS wr
+                LEFT JOIN maps ON wr.map_id = maps.id
+                WHERE maps.{'tmx_id' if 'tmx_id' in this_new_wr else 'tm_uid'} = ?
+            """
+    old_data = db_cursor.fetchall(
+        query,
+        (this_new_wr["tmx_id"] if "tmx_id" in this_new_wr else this_new_wr["tm_uid"],),
+    )[0]
+    # days_diff = abs(
+    #     dt.strptime(this_new_wr["date"], "%Y-%m-%d %H:%M:%S") - old_data[0]
+    # ).days
+    # writing discord announcement FIRST
+    # It should be the other way around so that a discord announcement quasi confirms sucessful storing of new wr.
+    # But doing it this way allows to calculate `time_diff` in-place
+    query_discord = f"""
+                UPDATE worldrecords_discord_notify AS wr_not
+                LEFT JOIN worldrecords AS wr
+                    ON wr_not.id = wr.id
+                LEFT JOIN maps
+                    ON wr.map_id = maps.id
+                SET notified = 0, time_diff = wr.score - ?, days_passed = ?, former_holder = ?
+                WHERE maps.{'tmx_id' if 'tmx_id' in this_new_wr else 'tm_uid'} = ?;
+                """
+    db_cursor.execute(
+        query_discord,
+        (
+            this_new_wr["score"],
+            abs(
+                (
+                    dt.strptime(this_new_wr["date"], "%Y-%m-%d %H:%M:%S") - old_data[0]
+                ).days
+            ),
+            f"{TMString(old_data[2]).string} ({old_data[1]})"
+            if old_data[2]
+            else old_data[1],
+            this_new_wr["tmx_id"] if "tmx_id" in this_new_wr else this_new_wr["tm_uid"],
+        ),
+    )
+    query = f"""
+                UPDATE worldrecords AS wr
+                LEFT JOIN maps
+                ON wr.map_id = maps.id
+                SET score = ?, login = ?, nickname = ?, source = ?, date = ?
+                WHERE maps.{'tmx_id' if 'tmx_id' in this_new_wr else 'tm_uid'} = ?;
+            """
+    db_cursor.execute(
+        query,
+        (
+            this_new_wr["score"],
+            this_new_wr["login"] if "login" in this_new_wr else "",
+            this_new_wr["nick"] if "nick" in this_new_wr else "",
+            this_new_wr["source"],
+            this_new_wr["date"],
+            this_new_wr["tmx_id"] if "tmx_id" in this_new_wr else this_new_wr["tm_uid"],
+        ),
+    )
 
+
+def update_wrs_kackiest_kacky(config, secrets):
     kackiest_kacky_lock.acquire(timeout=2)
     if not kackiest_kacky_lock:
         logger.error("Could not update wrs. Failed to acquire updating_records_lock!")
@@ -243,53 +301,9 @@ def update_wrs_kackiest_kacky(config, secrets):
     # set up connection to backend database
     backend_db = DBConnection(config, secrets)
 
-    for e in update_wrs_kk_dedup:
-        logger.info(f"updating in DB: {e}")
-        # get old date
-        query = f"""
-                    SELECT date
-                    FROM worldrecords AS wr
-                    LEFT JOIN maps ON wr.map_id = maps.id
-                    WHERE maps.{'tmx_id' if 'tmx_id' in e else 'tm_uid'} = ?
-                """
-        old_date = backend_db.fetchall(
-            query, (e["tmx_id"] if "tmx_id" in e else e["tm_uid"],)
-        )[0][0]
-        days_diff = abs((dt.strptime(e["date"], "%Y-%m-%d %H:%M:%S") - old_date).days)
-        # writing discord announcement FIRST
-        # It should be the other way around so that a discord announcement quasi confirms sucessful storing of new wr.
-        # But doing it this way allows to calculate `time_diff` in-place
-        query_discord = f"""
-                    UPDATE worldrecords_discord_notify AS wr_not
-                    LEFT JOIN worldrecords AS wr
-                        ON wr_not.id = wr.id
-                    LEFT JOIN maps
-                        ON wr.map_id = maps.id
-                    SET notified = 0, time_diff = wr.score - ?, days_passed = ?
-                    WHERE maps.{'tmx_id' if 'tmx_id' in e else 'tm_uid'} = ?;
-                    """
-        backend_db.execute(
-            query_discord,
-            (e["score"], days_diff, e["tmx_id"] if "tmx_id" in e else e["tm_uid"]),
-        )
-        query = f"""
-                    UPDATE worldrecords AS wr
-                    LEFT JOIN maps
-                    ON wr.map_id = maps.id
-                    SET score = ?, login = ?, nickname = ?, source = ?, date = ?
-                    WHERE maps.{'tmx_id' if 'tmx_id' in e else 'tm_uid'} = ?;
-                """
-        backend_db.execute(
-            query,
-            (
-                e["score"],
-                e["login"] if "login" in e else "",
-                e["nick"] if "nick" in e else "",
-                e["source"],
-                e["date"],
-                e["tmx_id"] if "tmx_id" in e else e["tm_uid"],
-            ),
-        )
+    for new_wr in update_wrs_kk_dedup:
+        write_wr_to_db(backend_db, new_wr)
+
     kackiest_update_counter = (kackiest_update_counter + 1) % 10
     kackiest_kacky_lock.release()
 
@@ -297,10 +311,6 @@ def update_wrs_kackiest_kacky(config, secrets):
 def update_wrs_kacky_reloaded(
     config, secrets, excluded_event: int = None, only_event: int = None
 ):
-    # Set up logging
-    logger = logging.getLogger(config["logger_name"])
-    logger.setLevel(eval("logging." + config["loglevel"]))
-
     if not only_event:
         kacky_reloaded_lock.acquire(timeout=2)
         if not kacky_reloaded_lock:
@@ -425,47 +435,7 @@ def update_wrs_kacky_reloaded(
     backend_db = DBConnection(config, secrets)
 
     for new_wr in update_scores:
-        logger.info(f"updating in DB: {new_wr}")
-        # get old date
-        query = "SELECT date FROM worldrecords AS wr LEFT JOIN maps ON wr.map_id = maps.id WHERE maps.tm_uid = ?"
-        # backend_db.execute()
-        old_date = backend_db.fetchall(query, (new_wr["tm_uid"],))[0][0]
-        days_diff = abs(
-            dt.strptime(new_wr["date"], "%Y-%m-%d %H:%M:%S") - old_date
-        ).days
-        # writing discord announcement FIRST
-        # It should be the other way around so that a discord announcement quasi confirms sucessful storing of new wr.
-        # But doing it this way allows to calculate `time_diff` in-place
-        query_discord = """
-                    UPDATE worldrecords_discord_notify AS wr_not
-                    LEFT JOIN worldrecords AS wr
-                        ON wr_not.id = wr.id
-                    LEFT JOIN maps
-                        ON wr.map_id = maps.id
-                    SET notified = 0, time_diff = wr.score - ?, days_passed = ?
-                    WHERE maps.tm_uid = ?;
-                    """
-        backend_db.execute(
-            query_discord, (new_wr["score"], days_diff, new_wr["tm_uid"])
-        )
-        query = """
-                    UPDATE worldrecords AS wr
-                    LEFT JOIN maps
-                    ON wr.map_id = maps.id
-                    SET score = ?, login = ?, nickname = ?, source = ?, date = ?
-                    WHERE maps.tm_uid = ?;
-                """
-        backend_db.execute(
-            query,
-            (
-                new_wr["score"],
-                new_wr["login"] if "login" in new_wr else "",
-                new_wr["nick"] if "nick" in new_wr else "",
-                new_wr["source"],
-                new_wr["date"],
-                new_wr["tm_uid"],
-            ),
-        )
+        write_wr_to_db(backend_db, new_wr)
 
     if not only_event:
         reloaded_update_counter = (reloaded_update_counter + 1) % len(club_campaings)
@@ -481,8 +451,6 @@ def update_wrs_kacky_reloaded(
 
 
 def restore_wr_after_reset(config, secrets):
-    logger = logging.getLogger(config["logger_name"])
-    logger.setLevel(eval("logging." + config["loglevel"]))
     logger.info("Checking for reset WRs")
 
     backend_db = DBConnection(config, secrets)
