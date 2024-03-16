@@ -88,7 +88,7 @@ class NadeoAPI:
         headers = {
             "Ubi-AppId": "86263886-327a-4328-ac69-527f0d20a237",
             "Content-Type": "application/json",
-            "User-Agent": "Kacky WR Tracker / cork@dingens.me",
+            "User-Agent": "Kacky Reloaded WR Tracker / cork@dingens.me / discord: corkscrew. / The Kacky Discord",
         }
 
         r = session.post(
@@ -214,10 +214,3 @@ if __name__ == "__main__":
     1
     # res = test(services_atoken)
     # print(res)
-
-# curl -H "Authorization: nadeo_v1
-# t=eyJhbGciOiJIUzI1NiIsImVudiI6InRyYWNrbWFuaWEtcHJvZCIsInZlciI6IjEifQ.eyJqdGkiOiIzNjQ2ZDI4NC01YWI1LTExZWQtYWNhMC0wMjQyYWMxMTAwMDMiLCJpc3MiOiJOYWRlb1NlcnZpY2VzIiwiaWF0IjoxNjY3Mzk2OTg2LCJyYXQiOjE2NjczOTg3ODYsImV4cCI6MTY2NzQwMDU4NiwiYXVkIjoiTmFkZW9MaXZlU2VydmljZXMiLCJ1c2ciOiJDbGllbnQiLCJzaWQiOiIzMmE2M2JlMi01YWI1LTExZWQtOWU5NS0wMjQyYWMxMTAwMDUiLCJzdWIiOiI5OTNkNmUzNS03ZTE0LTRkMWMtYTZiZS01MzA5MzhiNGU0ZmMiLCJhdW4iOiJjb3Jrc2NyZXctZ2VyIiwicnRrIjpmYWxzZSwicGNlIjpmYWxzZX0.95eLuK4fMlShu0rS4JVUhyfp0sI_c9TTxujIlJBEqZ0"
-# -H "Accept: application/json" -H "Content-Type: application/json" https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/PD70uHpLr7oq9lWoheRVxugESy4/top  # noqa E501
-# curl -H "Authorization: nadeo_v1
-# t=eyJhbGciOiJIUzI1NiIsImVudiI6InRyYWNrbWFuaWEtcHJvZCIsInZlciI6IjEifQ.eyJqdGkiOiI4M2I3NzlmOC01YWNjLTExZWQtYjhmZi0wMjQyYWMxMTAwMDMiLCJpc3MiOiJOYWRlb1NlcnZpY2VzIiwiaWF0IjoxNjY3NDA2OTk0LCJyYXQiOjE2Njc0MDg3OTQsImV4cCI6MTY2NzQxMDU5NCwiYXVkIjoiTmFkZW9TZXJ2aWNlcyIsInVzZyI6IkNsaWVudCIsInNpZCI6IjgzYjc3N2QyLTVhY2MtMTFlZC1hMTRhLTAyNDJhYzExMDAwMyIsInN1YiI6Ijk5M2Q2ZTM1LTdlMTQtNGQxYy1hNmJlLTUzMDkzOGI0ZTRmYyIsImF1biI6ImNvcmtzY3Jldy1nZXIiLCJydGsiOmZhbHNlLCJwY2UiOmZhbHNlLCJ1YmlzZXJ2aWNlc191aWQiOiI2MzM1MjQzMy0xMGNjLTQwOTQtOWJkZi1lODczNjI5NTc5ODQifQ.fJffepiOMH58Anfhjo5Hhd-o_3uhJZQv9NhLnQAIvaI"
-# -H "Accept: application/json" -H "Content-Type: application/json" https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/PD70uHpLr7oq9lWoheRVxugESy4/top  # noqa E501

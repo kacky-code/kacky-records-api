@@ -1,4 +1,6 @@
 import datetime
+import json
+import zlib
 
 import mariadb
 
@@ -38,9 +40,9 @@ class KackyReloaded_KackyRecords:
                INNER JOIN localrecord
                        ON toprecords.map_id = localrecord.map_id
                           AND toprecords.wr = localrecord.score
-               LEFT JOIN player
+               INNER JOIN player
                       ON localrecord.player_id = player.id
-               LEFT JOIN kackychallenges
+               INNER JOIN kackychallenges
                       ON kackychallenges.id = localrecord.map_id;
         """
         self.cursor.execute(query)
@@ -104,10 +106,10 @@ class KackyReloaded_KackyRecords:
                    INNER JOIN localrecord
                            ON toprecords.map_id = localrecord.map_id
                               AND toprecords.wr = localrecord.score
-                   LEFT JOIN player
+                   INNER JOIN player
                           ON localrecord.player_id = player.id
-                   LEFT JOIN kackychallenges
-                          ON kackychallenges.id = localrecord.map_id;
+                   INNER JOIN kackychallenges
+                          ON kackychallenges.id = localrecord.map_id
             WHERE  localrecord.created_at > ?;
         """
         self.cursor.execute(query, (since_str,))
@@ -122,7 +124,7 @@ class KackyReloaded_KackyRecords:
                 player.uplay_nickname AS author_uplay,
                 edition
             FROM kackychallenges
-            LEFT JOIN player
+            INNER JOIN player
             ON kackychallenges.author = player.login;
             """
         self.cursor.execute(query)
@@ -150,10 +152,43 @@ class KackyReloaded_KackyRecords:
                 FROM localrecord
                 INNER JOIN player ON localrecord.player_id = player.id
             ) AS pbs
-            INNER JOIN map ON pbs.map_id = map.id AND UPPER(map.file) NOT LIKE UPPER("%Lobby%")
+            INNER JOIN map ON pbs.map_id = map.id AND UPPER(map.file) NOT LIKE UPPER("%%Lobby%")
             WHERE uplay_nickname = ?;
         """
         self.cursor.execute(q, (user,))
+        qres = self.cursor.fetchall()
+        # replace \u2013 with - in map name
+        return list(
+            map(lambda elem: [elem[0].replace("\u2013", "-")] + list(elem[1:]), qres)
+        )
+
+    def get_user_pbs_edition(self, user: str, edition: int):
+        q = """
+            SELECT
+                map.name,
+                pbs.score,
+                pbs.updated_at,
+                pbs.kacky_rank
+            FROM (
+                SELECT
+                    localrecord.map_id,
+                    localrecord.score,
+                    localrecord.updated_at,
+                    player.nickname,
+                    player.login,
+                    player.uplay_nickname,
+                    RANK() OVER (
+                        PARTITION BY localrecord.map_id
+                        ORDER BY localrecord.score, localrecord.updated_at ASC
+                    ) AS kacky_rank
+                FROM localrecord
+                INNER JOIN player ON localrecord.player_id = player.id
+            ) AS pbs
+            INNER JOIN map ON pbs.map_id = map.id AND UPPER(map.file) NOT LIKE UPPER("%%Lobby%")
+            INNER JOIN kackychallenges ON map.uid = kackychallenges.uid
+            WHERE uplay_nickname = ? and kackychallenges.edition = ?;
+        """
+        self.cursor.execute(q, (user, edition))
         qres = self.cursor.fetchall()
         # replace \u2013 with - in map name
         return list(
@@ -176,7 +211,63 @@ class KackyReloaded_KackyRecords:
         qres = self.cursor.fetchall()
         return [{"edition": r[0], "fins": r[1]} for r in qres]
 
+    def get_map_leaderboard(
+        self,
+        kacky_id: int,
+        version: str,
+        positions: int = 10,
+        raw: bool = False,
+        compressed: bool = False,
+    ):
+        q = """
+            SELECT
+                localrecord.score,
+                localrecord.updated_at,
+                player.nickname,
+                player.login,
+                player.uplay_nickname,
+                RANK() OVER (
+                    PARTITION BY localrecord.map_id
+                    ORDER BY localrecord.score, localrecord.updated_at ASC
+                ) AS lb_rank
+            FROM localrecord
+            INNER JOIN player ON localrecord.player_id = player.id
+            INNER JOIN map ON map.id = localrecord.map_id
+            WHERE map.name LIKE ?
+        """
+        import logging
+
+        a = logging.getLogger("KackyRecords")
+        if positions > 0:
+            q += f"LIMIT {positions}"
+        a.debug(q)
+        a.debug((f"{kacky_id}{(f' [{version}]' if version else '')}",))
+        self.cursor.execute(
+            q + ";", (f"%#{kacky_id}{(f' [{version}]' if version else '')}",)
+        )
+        qres = self.cursor.fetchall()
+        a.debug(qres)
+        if raw:
+            return (
+                zlib.compress(json.dumps(qres, default=json_serial).encode())
+                if compressed
+                else qres
+            )
+        keys = ["score", "date", "nickname", "login", "uplay", "rank"]
+        if compressed:
+            raise ValueError("compression only work with raw values")
+        return [{k: v for k, v in zip(keys, entry)} for entry in qres]
+
 
 def datetimetostr(dictin):
     dictin["date"] = dictin["date"].strftime("%m/%d/%Y, %H:%M:%S")
     return dictin
+
+
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    """https://stackoverflow.com/a/22238613"""
+
+    if isinstance(obj, (datetime)):
+        return obj.isoformat()
+    raise TypeError("Type %s not serializable" % type(obj))

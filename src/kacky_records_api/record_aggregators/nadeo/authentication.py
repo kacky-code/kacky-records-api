@@ -1,5 +1,6 @@
 import json
-import time
+import logging
+from datetime import datetime as dt
 
 import requests
 
@@ -22,6 +23,7 @@ class AuthenticationHandler:
     def __init__(self, user: str, pwd: str, accounttype: str, user_agent: str):
         if not hasattr(self, "_nadeo_tokens"):
             self.__singleton__init__(user, pwd, accounttype, user_agent)
+        self.logger = logging.getLogger("KackyRecords")
 
     def __singleton__init__(
         self, user: str, pwd: str, accounttype: str, user_agent: str
@@ -150,20 +152,21 @@ class AuthenticationHandler:
         # else:
         # all tokens valid and dont need renewal
 
+    def ubisoft_auth_status(self):
+        if not self._ubi_auth:
+            self.logger.info("Updating Ubisoft Token!")
+            self._ubi_auth = self._ubisoft_account_login()
+
+        if (
+            dt.strptime(
+                self._ubi_auth["expiration"][:26].replace("Z", ""),
+                "%Y-%m-%dT%H:%M:%S.%f",
+            )
+            < dt.utcnow()
+        ):
+            self.logger.info("Ubisoft Token expired!")
+            self._ubi_auth = self._ubisoft_account_login()
+
     @property
     def tokens(self):
         return {audience: token for audience, token in self._nadeo_tokens.items()}
-
-
-if __name__ == "__main__":
-    a = AuthenticationHandler("corkscrew@live.de", "Sp33dboot", "account")
-    # a = AuthenticationHandler("cork-kacky-checker", "Pa>Z!Ks~bdtxOG.r", "dedicated")
-    minutes = 0
-    loop_minutes = 3
-    while True:
-        print(minutes)
-        print("rat times:")
-        print(list(map(lambda t: t._acc_payload["rat"], a._nadeo_tokens.values())))
-        a.services_auth_status()
-        time.sleep(loop_minutes * 60)
-        minutes += loop_minutes
